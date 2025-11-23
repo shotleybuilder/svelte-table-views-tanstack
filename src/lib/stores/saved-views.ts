@@ -54,7 +54,7 @@ async function loadViewsFromCollection(): Promise<SavedView[]> {
 
 	try {
 		const collection = await getViewsCollection()
-		return Array.from(collection.getAllValues())
+		return collection.toArray
 	} catch (err) {
 		console.error('[SavedViews] Failed to load from TanStack DB:', err)
 		return []
@@ -93,7 +93,7 @@ async function refreshViews(): Promise<void> {
 
 	try {
 		const collection = await getViewsCollection()
-		const views = Array.from(collection.getAllValues())
+		const views = collection.toArray
 		savedViews.set(views)
 	} catch (err) {
 		console.error('[SavedViews] Failed to refresh views:', err)
@@ -145,20 +145,18 @@ export const viewActions = {
 
 		if (view) {
 			// Update usage stats
-			const updated = {
-				...view,
-				usageCount: view.usageCount + 1,
-				lastUsed: Date.now()
-			}
-
-			collection.update(id, updated)
+			const newUsageCount = view.usageCount + 1
+			collection.update(id, (draft) => {
+				draft.usageCount = newUsageCount
+				draft.lastUsed = Date.now()
+			})
 			await refreshViews()
 
 			activeViewId.set(id)
 			activeViewModified.set(false)
 
-			console.log('[SavedViews] Loaded view:', view.name, 'Usage:', updated.usageCount)
-			return updated
+			console.log('[SavedViews] Loaded view:', view.name, 'Usage:', newUsageCount)
+			return { ...view, usageCount: newUsageCount, lastUsed: Date.now() }
 		} else {
 			console.warn('[SavedViews] View not found:', id)
 			return undefined
@@ -177,13 +175,10 @@ export const viewActions = {
 		const view = collection.get(id)
 
 		if (view) {
-			const updated = {
-				...view,
-				...updates,
-				updatedAt: Date.now()
-			}
-
-			collection.update(id, updated)
+			collection.update(id, (draft) => {
+				Object.assign(draft, updates)
+				draft.updatedAt = Date.now()
+			})
 			await refreshViews()
 
 			activeViewModified.set(false)
@@ -232,13 +227,10 @@ export const viewActions = {
 		const view = collection.get(id)
 
 		if (view) {
-			const updated = {
-				...view,
-				name: newName,
-				updatedAt: Date.now()
-			}
-
-			collection.update(id, updated)
+			collection.update(id, (draft) => {
+				draft.name = newName
+				draft.updatedAt = Date.now()
+			})
 			await refreshViews()
 
 			console.log('[SavedViews] Renamed view:', view.name, '→', newName)

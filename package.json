@@ -1,6 +1,6 @@
 {
 	"name": "svelte-table-views-tanstack",
-	"version": "0.1.1",
+	"version": "0.1.2",
 	"description": "Save and restore table view configurations (filters, sorting, columns) with TanStack DB persistence. Built for Svelte 5 apps using the TanStack stack. Features reactive queries, local-first storage with IndexedDB, and seamless integration with TanStack Table.",
 	"keywords": [
 		"svelte",

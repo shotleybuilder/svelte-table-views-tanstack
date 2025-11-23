@@ -154,9 +154,9 @@
 	// Sort data
 	$: sortedData = sort
 		? [...filteredData].sort((a, b) => {
-				const aVal = a[sort.columnId as keyof typeof a]
-				const bVal = b[sort.columnId as keyof typeof b]
-				const modifier = sort.direction === 'asc' ? 1 : -1
+				const aVal = a[sort!.columnId as keyof typeof a]
+				const bVal = b[sort!.columnId as keyof typeof b]
+				const modifier = sort!.direction === 'asc' ? 1 : -1
 				return aVal < bVal ? -modifier : aVal > bVal ? modifier : 0
 		  })
 		: filteredData
@@ -266,7 +266,7 @@
 						{#each sortedData as row}
 							<tr>
 								{#each columns as col}
-									<td>{row[col]}</td>
+									<td>{row[col as keyof typeof row]}</td>
 								{/each}
 							</tr>
 						{/each}
