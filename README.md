@@ -1,16 +1,18 @@
-# svelte-table-views
+# svelte-table-views-tanstack
 
-**Save and restore table view configurations with localStorage persistence for Svelte applications**
+**Save and restore table view configurations with TanStack DB persistence for Svelte applications**
 
-A lightweight, framework-agnostic Svelte package that lets users save, manage, and restore table configurations (filters, sorting, column order, visibility) as named "views". Perfect for data-heavy applications where users need to switch between different table configurations quickly.
+Save and restore table view configurations (filters, sorting, columns) with TanStack DB persistence. Built for Svelte 5 apps using the TanStack stack. Features reactive queries, local-first storage with IndexedDB, and seamless integration with TanStack Table. Perfect for data-heavy applications that need user-customizable table views with robust persistence.
 
-[![npm version](https://img.shields.io/npm/v/svelte-table-views.svg)](https://www.npmjs.com/package/svelte-table-views)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
+> **Note:** This is the TanStack DB version. For a zero-dependency version using browser localStorage, see [svelte-table-views](https://github.com/shotleybuilder/svelte-table-views).
 
 ## Features
 
 - 🎯 **Complete Table State Management** - Save filters, sort, columns, column order, widths, and more
-- 💾 **localStorage Persistence** - Views persist across sessions automatically
+- 🗄️ **TanStack DB Persistence** - Reactive collections with IndexedDB storage
+- 📊 **Local-First Architecture** - Works offline, syncs when online
 - 🔍 **Search & Filter** - Find views quickly with live search
 - ⌨️ **Keyboard Navigation** - Arrow keys, Enter, Escape support
 - ✏️ **Inline Rename** - Rename views with explicit save/cancel buttons
@@ -20,13 +22,25 @@ A lightweight, framework-agnostic Svelte package that lets users save, manage, a
 - ↔️ **Update vs Save New** - Smart split button when view is modified
 - ✅ **Column Validation** - Gracefully handles missing columns
 - 🎨 **Tailwind CSS Styled** - Beautiful, accessible UI out of the box
-- 🚀 **Zero Dependencies** - Only peer dependency is Svelte
+- ⚡ **Reactive Queries** - Automatic UI updates via TanStack DB collections
 - 📦 **TypeScript Support** - Full type definitions included
 
 ## Installation
 
 ```bash
-npm install svelte-table-views
+npm install svelte-table-views-tanstack
+```
+
+### Peer Dependencies
+
+This package requires:
+- `svelte: ^4.0.0 || ^5.0.0`
+- `@tanstack/db: ^0.5.0`
+
+If you don't have TanStack DB installed:
+
+```bash
+npm install @tanstack/db
 ```
 
 ## Quick Start
@@ -35,8 +49,8 @@ npm install svelte-table-views
 
 ```svelte
 <script lang="ts">
-  import { ViewSelector, SaveViewModal, viewActions, activeViewId, activeViewModified } from 'svelte-table-views'
-  import type { TableConfig, SavedView } from 'svelte-table-views'
+  import { ViewSelector, SaveViewModal, viewActions, activeViewId, activeViewModified } from 'svelte-table-views-tanstack'
+  import type { TableConfig, SavedView } from 'svelte-table-views-tanstack'
 
   let showSaveModal = false
   let capturedConfig: TableConfig | null = null
@@ -126,6 +140,36 @@ function handleViewSaved(event: CustomEvent<{ id: string; name: string }>) {
 }
 ```
 
+## TanStack DB Architecture
+
+This package uses **TanStack DB Collections** for storage:
+
+```
+UI Components (Svelte)
+    ↕
+Svelte Stores (reactive bridge)
+    ↕
+TanStack DB Collection
+    ↕
+IndexedDB (localStorage fallback)
+```
+
+### Storage Key
+
+Views are stored in a TanStack DB collection with key: `'svelte-table-views-saved-views'`
+
+### SSR Safety
+
+The package uses dynamic imports and browser guards to ensure safe server-side rendering:
+
+```typescript
+// Collection initialized only in browser
+if (browser) {
+  const { createCollection, localStorageCollectionOptions } = await import('@tanstack/db')
+  // ... collection setup
+}
+```
+
 ## API Reference
 
 ### Components
@@ -174,10 +218,10 @@ Modal component for saving new table views.
 
 #### `savedViews`
 
-Writable store containing all saved views.
+Writable store containing all saved views (synced with TanStack DB).
 
 ```typescript
-import { savedViews } from 'svelte-table-views'
+import { savedViews } from 'svelte-table-views-tanstack'
 
 $savedViews // SavedView[]
 ```
@@ -187,7 +231,7 @@ $savedViews // SavedView[]
 Derived store containing recent views (last 7 days, top 5, sorted by lastUsed).
 
 ```typescript
-import { recentViews } from 'svelte-table-views'
+import { recentViews } from 'svelte-table-views-tanstack'
 
 $recentViews // SavedView[]
 ```
@@ -197,7 +241,7 @@ $recentViews // SavedView[]
 Writable store tracking the currently active view ID.
 
 ```typescript
-import { activeViewId } from 'svelte-table-views'
+import { activeViewId } from 'svelte-table-views-tanstack'
 
 $activeViewId // string | null
 ```
@@ -207,7 +251,7 @@ $activeViewId // string | null
 Writable store tracking whether the active view has been modified.
 
 ```typescript
-import { activeViewModified } from 'svelte-table-views'
+import { activeViewModified } from 'svelte-table-views-tanstack'
 
 $activeViewModified // boolean
 ```
@@ -217,7 +261,7 @@ $activeViewModified // boolean
 Derived store containing the full active view object.
 
 ```typescript
-import { activeView } from 'svelte-table-views'
+import { activeView } from 'svelte-table-views-tanstack'
 
 $activeView // SavedView | null
 ```
@@ -226,7 +270,7 @@ $activeView // SavedView | null
 
 #### `viewActions.save(input: SavedViewInput): Promise<SavedView>`
 
-Save a new view.
+Save a new view to TanStack DB collection.
 
 ```typescript
 const newView = await viewActions.save({
@@ -245,7 +289,7 @@ const newView = await viewActions.save({
 
 #### `viewActions.load(id: string): Promise<SavedView | undefined>`
 
-Load an existing view. Updates usage statistics and sets as active.
+Load an existing view from TanStack DB. Updates usage statistics and sets as active.
 
 ```typescript
 const view = await viewActions.load('view-id-123')
@@ -253,7 +297,7 @@ const view = await viewActions.load('view-id-123')
 
 #### `viewActions.update(id: string, updates: Partial<SavedView>): Promise<void>`
 
-Update an existing view.
+Update an existing view in TanStack DB.
 
 ```typescript
 await viewActions.update('view-id-123', {
@@ -264,7 +308,7 @@ await viewActions.update('view-id-123', {
 
 #### `viewActions.delete(id: string): Promise<void>`
 
-Delete a view.
+Delete a view from TanStack DB.
 
 ```typescript
 await viewActions.delete('view-id-123')
@@ -272,7 +316,7 @@ await viewActions.delete('view-id-123')
 
 #### `viewActions.rename(id: string, newName: string): Promise<void>`
 
-Rename a view.
+Rename a view in TanStack DB.
 
 ```typescript
 await viewActions.rename('view-id-123', 'New View Name')
@@ -408,10 +452,15 @@ function handleViewSelected(event: CustomEvent<{ view: SavedView }>) {
 
 ### Custom Storage Key
 
-The default localStorage key is `'svelte_table_views_saved_views'`. To customize it, fork the package and modify `src/lib/stores/saved-views.ts`:
+The default TanStack DB storage key is `'svelte-table-views-saved-views'`. To customize it, modify `src/lib/stores/saved-views.ts`:
 
 ```typescript
-const STORAGE_KEY = 'my_app_saved_views'
+viewsCollection = createCollection(
+  localStorageCollectionOptions<SavedView, string>({
+    storageKey: 'my-app-saved-views', // Change this
+    getKey: (item) => item.id
+  })
+)
 ```
 
 ### Storage Limit
@@ -458,8 +507,20 @@ Target the component classes in your global CSS:
 ## Browser Compatibility
 
 - Modern browsers with `crypto.randomUUID()` support
-- localStorage support required
+- IndexedDB support required (with localStorage fallback)
+- TanStack DB browser support
 - No IE11 support
+
+## Comparison: TanStack vs localStorage Version
+
+| Feature | svelte-table-views | svelte-table-views-tanstack |
+|---------|-------------------|----------------------------|
+| Storage | Browser localStorage | TanStack DB (IndexedDB) |
+| Dependencies | Zero | `@tanstack/db` |
+| Reactivity | Svelte stores | TanStack DB Collections + Stores |
+| Architecture | Simple, direct | Local-first, reactive |
+| Use Case | Standalone apps | Apps using TanStack stack |
+| Bundle Size | Smaller | Larger (includes TanStack DB) |
 
 ## Contributing
 
@@ -471,15 +532,13 @@ MIT © Jason (Shotley Builder)
 
 ## Related Projects
 
+- [svelte-table-views](https://github.com/shotleybuilder/svelte-table-views) - localStorage version (zero dependencies)
 - [@shotleybuilder/svelte-table-kit](https://github.com/shotleybuilder/svelte-table-kit) - Headless TanStack Table wrapper for Svelte
 - [TanStack Table](https://tanstack.com/table) - Headless table library
-
-## Changelog
-
-See [CHANGELOG.md](CHANGELOG.md) for version history.
+- [TanStack DB](https://tanstack.com/db) - Local-first reactive database
 
 ## Support
 
-- 🐛 [Report a Bug](https://github.com/shotleybuilder/svelte-table-views/issues)
-- 💡 [Request a Feature](https://github.com/shotleybuilder/svelte-table-views/issues)
-- 📖 [Read the Docs](https://github.com/shotleybuilder/svelte-table-views#readme)
+- 🐛 [Report a Bug](https://github.com/shotleybuilder/svelte-table-views-tanstack/issues)
+- 💡 [Request a Feature](https://github.com/shotleybuilder/svelte-table-views-tanstack/issues)
+- 📖 [Read the Docs](https://github.com/shotleybuilder/svelte-table-views-tanstack#readme)

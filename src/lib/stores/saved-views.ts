@@ -1,58 +1,73 @@
 /**
- * Saved Views Store
+ * Saved Views Store (TanStack DB Version)
  *
  * Reactive Svelte store for managing saved table view configurations.
- * Uses browser localStorage for simple, fast persistence.
+ * Uses TanStack DB with localStorage persistence for reactive queries.
  *
- * Future: Can be extended to support backend storage via custom adapter.
+ * Requires @tanstack/db to be installed in the consuming application.
  */
 
 import { writable, derived, get } from 'svelte/store'
 import type { SavedView, SavedViewInput } from '../types/index.js'
+import type { Collection } from '@tanstack/db'
 
 // Check if we're in browser environment
 const browser = typeof window !== 'undefined'
-
-const STORAGE_KEY = 'svelte_table_views_saved_views'
 
 // Active view tracking
 export const activeViewId = writable<string | null>(null)
 export const activeViewModified = writable<boolean>(false)
 
-// Load views from localStorage
-function loadViewsFromStorage(): SavedView[] {
+// TanStack DB collection (initialized lazily)
+let viewsCollection: Collection<SavedView, string> | null = null
+
+/**
+ * Initialize TanStack DB collection (browser only)
+ */
+async function getViewsCollection(): Promise<Collection<SavedView, string>> {
+	if (!browser) {
+		throw new Error('TanStack DB can only be initialized in the browser')
+	}
+
+	if (viewsCollection) {
+		return viewsCollection
+	}
+
+	const { createCollection, localStorageCollectionOptions } = await import('@tanstack/db')
+
+	viewsCollection = createCollection(
+		localStorageCollectionOptions<SavedView, string>({
+			storageKey: 'svelte-table-views-saved-views',
+			getKey: (item) => item.id
+		})
+	)
+
+	console.log('[SavedViews] TanStack DB collection initialized')
+	return viewsCollection
+}
+
+/**
+ * Load views from TanStack DB collection
+ */
+async function loadViewsFromCollection(): Promise<SavedView[]> {
 	if (!browser) return []
 
 	try {
-		const stored = localStorage.getItem(STORAGE_KEY)
-		if (!stored) return []
-
-		const parsed = JSON.parse(stored)
-		return Array.isArray(parsed) ? parsed : []
+		const collection = await getViewsCollection()
+		return Array.from(collection.getAllValues())
 	} catch (err) {
-		console.error('[SavedViews] Failed to load from localStorage:', err)
+		console.error('[SavedViews] Failed to load from TanStack DB:', err)
 		return []
 	}
 }
 
-// Save views to localStorage
-function saveViewsToStorage(views: SavedView[]) {
-	if (!browser) return
-
-	try {
-		localStorage.setItem(STORAGE_KEY, JSON.stringify(views))
-	} catch (err) {
-		console.error('[SavedViews] Failed to save to localStorage:', err)
-	}
-}
-
 // All saved views (reactive store)
-export const savedViews = writable<SavedView[]>(loadViewsFromStorage())
+export const savedViews = writable<SavedView[]>([])
 
-// Sync to localStorage on changes
+// Initialize views from collection on browser
 if (browser) {
-	savedViews.subscribe((views) => {
-		saveViewsToStorage(views)
+	loadViewsFromCollection().then((views) => {
+		savedViews.set(views)
 	})
 }
 
@@ -71,9 +86,24 @@ export const activeView = derived([savedViews, activeViewId], ([$views, $id]) =>
 })
 
 /**
+ * Refresh views from collection and update store
+ */
+async function refreshViews(): Promise<void> {
+	if (!browser) return
+
+	try {
+		const collection = await getViewsCollection()
+		const views = Array.from(collection.getAllValues())
+		savedViews.set(views)
+	} catch (err) {
+		console.error('[SavedViews] Failed to refresh views:', err)
+	}
+}
+
+/**
  * View Actions
  *
- * CRUD operations for saved views
+ * CRUD operations for saved views using TanStack DB
  */
 export const viewActions = {
 	/**
@@ -93,9 +123,11 @@ export const viewActions = {
 			lastUsed: Date.now()
 		}
 
-		savedViews.update((views) => [...views, newView])
-		console.log('[SavedViews] Saved new view:', newView.name, newView.id)
+		const collection = await getViewsCollection()
+		collection.insert(newView)
+		await refreshViews()
 
+		console.log('[SavedViews] Saved new view:', newView.name, newView.id)
 		return newView
 	},
 
@@ -108,32 +140,29 @@ export const viewActions = {
 			throw new Error('Cannot load views on server')
 		}
 
-		const views = get(savedViews)
-		const view = views.find((v) => v.id === id)
+		const collection = await getViewsCollection()
+		const view = collection.get(id)
 
 		if (view) {
 			// Update usage stats
-			savedViews.update((views) =>
-				views.map((v) =>
-					v.id === id
-						? {
-								...v,
-								usageCount: v.usageCount + 1,
-								lastUsed: Date.now()
-						  }
-						: v
-				)
-			)
+			const updated = {
+				...view,
+				usageCount: view.usageCount + 1,
+				lastUsed: Date.now()
+			}
+
+			collection.update(id, updated)
+			await refreshViews()
 
 			activeViewId.set(id)
 			activeViewModified.set(false)
 
-			console.log('[SavedViews] Loaded view:', view.name, 'Usage:', view.usageCount + 1)
+			console.log('[SavedViews] Loaded view:', view.name, 'Usage:', updated.usageCount)
+			return updated
 		} else {
 			console.warn('[SavedViews] View not found:', id)
+			return undefined
 		}
-
-		return view
 	},
 
 	/**
@@ -144,21 +173,18 @@ export const viewActions = {
 			throw new Error('Cannot update views on server')
 		}
 
-		const views = get(savedViews)
-		const view = views.find((v) => v.id === id)
+		const collection = await getViewsCollection()
+		const view = collection.get(id)
 
 		if (view) {
-			savedViews.update((views) =>
-				views.map((v) =>
-					v.id === id
-						? {
-								...v,
-								...updates,
-								updatedAt: Date.now()
-						  }
-						: v
-				)
-			)
+			const updated = {
+				...view,
+				...updates,
+				updatedAt: Date.now()
+			}
+
+			collection.update(id, updated)
+			await refreshViews()
 
 			activeViewModified.set(false)
 			console.log('[SavedViews] Updated view:', id)
@@ -175,11 +201,13 @@ export const viewActions = {
 			throw new Error('Cannot delete views on server')
 		}
 
-		const views = get(savedViews)
-		const view = views.find((v) => v.id === id)
+		const collection = await getViewsCollection()
+		const view = collection.get(id)
 
 		if (view) {
-			savedViews.update((views) => views.filter((v) => v.id !== id))
+			collection.delete(id)
+			await refreshViews()
+
 			console.log('[SavedViews] Deleted view:', view.name)
 
 			// Clear active view if it was the deleted one
@@ -200,21 +228,18 @@ export const viewActions = {
 			throw new Error('Cannot rename views on server')
 		}
 
-		const views = get(savedViews)
-		const view = views.find((v) => v.id === id)
+		const collection = await getViewsCollection()
+		const view = collection.get(id)
 
 		if (view) {
-			savedViews.update((views) =>
-				views.map((v) =>
-					v.id === id
-						? {
-								...v,
-								name: newName,
-								updatedAt: Date.now()
-						  }
-						: v
-				)
-			)
+			const updated = {
+				...view,
+				name: newName,
+				updatedAt: Date.now()
+			}
+
+			collection.update(id, updated)
+			await refreshViews()
 
 			console.log('[SavedViews] Renamed view:', view.name, '→', newName)
 		} else {
