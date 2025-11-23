@@ -163,20 +163,20 @@
 </script>
 
 <svelte:head>
-	<title>Saved Views Demo - svelte-table-views</title>
+	<title>Saved Views Demo - svelte-table-views-tanstack</title>
 </svelte:head>
 
 <div class="container">
 	<header>
 		<h1>💾 Saved Table Views Demo</h1>
-		<p>Save and restore table configurations with localStorage persistence</p>
+		<p>Save and restore table configurations with TanStack DB persistence</p>
 		<p class="subtitle">
-			Powered by Svelte 5 and TanStack Table
+			Powered by Svelte 5 and TanStack DB
 		</p>
 		<nav class="nav-links">
 			<a href="/">← Back to Home</a>
-			<a href="https://github.com/shotleybuilder/svelte-table-views" target="_blank">GitHub</a>
-			<a href="https://www.npmjs.com/package/svelte-table-views" target="_blank">npm</a>
+			<a href="https://github.com/shotleybuilder/svelte-table-views-tanstack" target="_blank">GitHub</a>
+			<a href="https://www.npmjs.com/package/svelte-table-views-tanstack" target="_blank">npm</a>
 		</nav>
 	</header>
 
@@ -298,16 +298,16 @@
 				<li>✅ Rename, duplicate, and delete views</li>
 				<li>✅ Keyboard navigation (Arrow keys, Enter, Escape)</li>
 				<li>✅ Column validation on load</li>
-				<li>✅ localStorage persistence</li>
+				<li>✅ TanStack DB persistence (IndexedDB)</li>
 				<li>✅ TypeScript support</li>
 			</ul>
 		</section>
 
 		<section>
 			<h2>🚀 Getting Started</h2>
-			<pre><code>npm install svelte-table-views</code></pre>
+			<pre><code>npm install svelte-table-views-tanstack @tanstack/db</code></pre>
 			<pre><code>&lt;script lang="ts"&gt;
-  import &#123; ViewSelector, SaveViewModal, viewActions &#125; from 'svelte-table-views';
+  import &#123; ViewSelector, SaveViewModal, viewActions &#125; from 'svelte-table-views-tanstack';
 
   let showSaveModal = false;
   let capturedConfig = null;

@@ -5,9 +5,9 @@
 
 <div class="min-h-screen bg-gray-50 flex items-center justify-center p-8">
 	<div class="max-w-2xl text-center">
-		<h1 class="text-4xl font-bold text-gray-900 mb-4">svelte-table-views</h1>
+		<h1 class="text-4xl font-bold text-gray-900 mb-4">svelte-table-views-tanstack</h1>
 		<p class="text-lg text-gray-600 mb-8">
-			Save and restore table view configurations with localStorage persistence
+			Save and restore table view configurations with TanStack DB persistence
 		</p>
 
 		<div class="flex gap-4 justify-center">
@@ -18,7 +18,7 @@
 				View Demo
 			</a>
 			<a
-				href="https://github.com/shotleybuilder/svelte-table-views"
+				href="https://github.com/shotleybuilder/svelte-table-views-tanstack"
 				target="_blank"
 				rel="noopener noreferrer"
 				class="inline-flex items-center gap-2 px-6 py-3 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
@@ -26,7 +26,7 @@
 				GitHub
 			</a>
 			<a
-				href="https://www.npmjs.com/package/svelte-table-views"
+				href="https://www.npmjs.com/package/svelte-table-views-tanstack"
 				target="_blank"
 				rel="noopener noreferrer"
 				class="inline-flex items-center gap-2 px-6 py-3 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
