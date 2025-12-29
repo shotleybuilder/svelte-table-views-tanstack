@@ -12,6 +12,7 @@ export { default as ViewSelector } from './components/ViewSelector.svelte'
 // Stores
 export {
 	savedViews,
+	savedViewsReady,
 	recentViews,
 	activeViewId,
 	activeViewModified,

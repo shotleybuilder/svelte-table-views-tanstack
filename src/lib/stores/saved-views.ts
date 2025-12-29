@@ -20,93 +20,83 @@ export const activeViewModified = writable<boolean>(false)
 
 // TanStack DB collection (initialized lazily)
 let viewsCollection: Collection<SavedView, string> | null = null
+let collectionReadyPromise: Promise<Collection<SavedView, string>> | null = null
 
 /**
- * Initialize TanStack DB collection (browser only)
+ * Initialize TanStack DB collection and wait for it to be ready (browser only)
+ * Uses onReady() to ensure localStorage data has been loaded before returning
  */
 async function getViewsCollection(): Promise<Collection<SavedView, string>> {
 	if (!browser) {
 		throw new Error('TanStack DB can only be initialized in the browser')
 	}
 
-	if (viewsCollection) {
+	// Return existing ready promise if initialization is in progress
+	if (collectionReadyPromise) {
+		return collectionReadyPromise
+	}
+
+	// If collection exists and is ready, return it
+	if (viewsCollection && viewsCollection.isReady()) {
 		return viewsCollection
 	}
 
-	const { createCollection, localStorageCollectionOptions } = await import('@tanstack/db')
+	// Create the ready promise
+	collectionReadyPromise = (async () => {
+		const { createCollection, localStorageCollectionOptions } = await import('@tanstack/db')
 
-	viewsCollection = createCollection(
-		localStorageCollectionOptions<SavedView, string>({
-			storageKey: 'svelte-table-views-saved-views',
-			getKey: (item) => item.id
-		})
-	)
+		viewsCollection = createCollection(
+			localStorageCollectionOptions<SavedView, string>({
+				storageKey: 'svelte-table-views-saved-views',
+				getKey: (item) => item.id
+			})
+		)
 
-	console.log('[SavedViews] TanStack DB collection initialized')
-	return viewsCollection
-}
-
-/**
- * Load views directly from localStorage (fallback for initial load)
- */
-function loadViewsFromLocalStorage(): SavedView[] {
-	if (!browser) return []
-
-	try {
-		const storageKey = 'svelte-table-views-saved-views'
-		const data = localStorage.getItem(storageKey)
-		if (!data) return []
-
-		const parsed = JSON.parse(data)
-		// TanStack DB stores as { [id]: { versionKey, data } }
-		const views = Object.values(parsed).map((item: unknown) => {
-			const stored = item as { versionKey: string; data: SavedView }
-			return stored.data
-		})
-
-		console.log('[SavedViews] Loaded from localStorage:', views.length, 'views')
-		return views
-	} catch (err) {
-		console.error('[SavedViews] Failed to load from localStorage:', err)
-		return []
-	}
-}
-
-/**
- * Load views from TanStack DB collection
- */
-async function loadViewsFromCollection(): Promise<SavedView[]> {
-	if (!browser) return []
-
-	try {
-		const collection = await getViewsCollection()
-		const views = collection.toArray
-
-		// If collection is empty but localStorage has data, use localStorage directly
-		// This handles the race condition where TanStack DB hasn't synced yet
-		if (views.length === 0) {
-			const localStorageViews = loadViewsFromLocalStorage()
-			if (localStorageViews.length > 0) {
-				return localStorageViews
-			}
+		// Wait for collection to be ready (localStorage synced)
+		if (!viewsCollection.isReady()) {
+			await new Promise<void>((resolve) => {
+				viewsCollection!.onReady(() => {
+					console.log('[SavedViews] TanStack DB collection ready')
+					resolve()
+				})
+			})
 		}
 
-		return views
-	} catch (err) {
-		console.error('[SavedViews] Failed to load from TanStack DB:', err)
-		// Fallback to direct localStorage read
-		return loadViewsFromLocalStorage()
-	}
+		console.log('[SavedViews] TanStack DB collection initialized with', viewsCollection.toArray.length, 'views')
+		return viewsCollection
+	})()
+
+	return collectionReadyPromise
 }
 
 // All saved views (reactive store)
 export const savedViews = writable<SavedView[]>([])
 
-// Initialize views from collection on browser
-if (browser) {
-	loadViewsFromCollection().then((views) => {
+// Store for tracking initialization state
+export const savedViewsReady = writable<boolean>(false)
+
+/**
+ * Initialize views from collection on browser
+ * Waits for TanStack DB to be ready before reading
+ */
+async function initializeViews(): Promise<void> {
+	if (!browser) return
+
+	try {
+		const collection = await getViewsCollection()
+		const views = collection.toArray
 		savedViews.set(views)
-	})
+		savedViewsReady.set(true)
+		console.log('[SavedViews] Initialized with', views.length, 'views')
+	} catch (err) {
+		console.error('[SavedViews] Failed to initialize:', err)
+		savedViewsReady.set(true) // Still mark as ready so UI doesn't hang
+	}
+}
+
+// Start initialization
+if (browser) {
+	initializeViews()
 }
 
 // Recent views (last 7 days, top 5, sorted by lastUsed)
@@ -125,28 +115,18 @@ export const activeView = derived([savedViews, activeViewId], ([$views, $id]) =>
 
 /**
  * Refresh views from collection and update store
+ * Collection is guaranteed to be ready since getViewsCollection waits for it
  */
 async function refreshViews(): Promise<void> {
 	if (!browser) return
 
 	try {
 		const collection = await getViewsCollection()
-		let views = collection.toArray
-
-		// If collection returns fewer views than localStorage, use localStorage
-		// This handles sync issues with TanStack DB
-		const localStorageViews = loadViewsFromLocalStorage()
-		if (localStorageViews.length > views.length) {
-			console.log('[SavedViews] Refresh: Using localStorage fallback', localStorageViews.length, 'vs collection', views.length)
-			views = localStorageViews
-		}
-
+		const views = collection.toArray
 		savedViews.set(views)
+		console.log('[SavedViews] Refreshed with', views.length, 'views')
 	} catch (err) {
 		console.error('[SavedViews] Failed to refresh views:', err)
-		// Fallback to direct localStorage read
-		const localStorageViews = loadViewsFromLocalStorage()
-		savedViews.set(localStorageViews)
 	}
 }
 
@@ -331,5 +311,26 @@ export const viewActions = {
 			limit,
 			percentFull: Math.round((count / limit) * 100)
 		}
+	},
+
+	/**
+	 * Wait for views to be ready
+	 * Returns a promise that resolves when the collection has loaded from localStorage
+	 */
+	async waitForReady(): Promise<void> {
+		if (!browser) return
+
+		// If already ready, return immediately
+		if (get(savedViewsReady)) return
+
+		// Wait for ready state
+		return new Promise((resolve) => {
+			const unsubscribe = savedViewsReady.subscribe((ready) => {
+				if (ready) {
+					unsubscribe()
+					resolve()
+				}
+			})
+		})
 	}
 }
