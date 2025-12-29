@@ -131,10 +131,22 @@ async function refreshViews(): Promise<void> {
 
 	try {
 		const collection = await getViewsCollection()
-		const views = collection.toArray
+		let views = collection.toArray
+
+		// If collection returns fewer views than localStorage, use localStorage
+		// This handles sync issues with TanStack DB
+		const localStorageViews = loadViewsFromLocalStorage()
+		if (localStorageViews.length > views.length) {
+			console.log('[SavedViews] Refresh: Using localStorage fallback', localStorageViews.length, 'vs collection', views.length)
+			views = localStorageViews
+		}
+
 		savedViews.set(views)
 	} catch (err) {
 		console.error('[SavedViews] Failed to refresh views:', err)
+		// Fallback to direct localStorage read
+		const localStorageViews = loadViewsFromLocalStorage()
+		savedViews.set(localStorageViews)
 	}
 }
 
