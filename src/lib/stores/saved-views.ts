@@ -53,14 +53,8 @@ async function getViewsCollection(): Promise<Collection<SavedView, string>> {
 		)
 
 		// Wait for collection to be ready (localStorage synced)
-		if (!viewsCollection.isReady()) {
-			await new Promise<void>((resolve) => {
-				viewsCollection!.onFirstReady(() => {
-					console.log('[SavedViews] TanStack DB collection ready')
-					resolve()
-				})
-			})
-		}
+		await viewsCollection.preload()
+		console.log('[SavedViews] TanStack DB collection ready via preload()')
 
 		console.log('[SavedViews] TanStack DB collection initialized with', viewsCollection.toArray.length, 'views')
 		return viewsCollection
