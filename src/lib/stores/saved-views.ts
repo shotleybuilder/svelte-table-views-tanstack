@@ -55,7 +55,7 @@ async function getViewsCollection(): Promise<Collection<SavedView, string>> {
 		// Wait for collection to be ready (localStorage synced)
 		if (!viewsCollection.isReady()) {
 			await new Promise<void>((resolve) => {
-				viewsCollection!.onReady(() => {
+				viewsCollection!.onFirstReady(() => {
 					console.log('[SavedViews] TanStack DB collection ready')
 					resolve()
 				})
