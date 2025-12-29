@@ -47,6 +47,32 @@ async function getViewsCollection(): Promise<Collection<SavedView, string>> {
 }
 
 /**
+ * Load views directly from localStorage (fallback for initial load)
+ */
+function loadViewsFromLocalStorage(): SavedView[] {
+	if (!browser) return []
+
+	try {
+		const storageKey = 'svelte-table-views-saved-views'
+		const data = localStorage.getItem(storageKey)
+		if (!data) return []
+
+		const parsed = JSON.parse(data)
+		// TanStack DB stores as { [id]: { versionKey, data } }
+		const views = Object.values(parsed).map((item: unknown) => {
+			const stored = item as { versionKey: string; data: SavedView }
+			return stored.data
+		})
+
+		console.log('[SavedViews] Loaded from localStorage:', views.length, 'views')
+		return views
+	} catch (err) {
+		console.error('[SavedViews] Failed to load from localStorage:', err)
+		return []
+	}
+}
+
+/**
  * Load views from TanStack DB collection
  */
 async function loadViewsFromCollection(): Promise<SavedView[]> {
@@ -54,10 +80,22 @@ async function loadViewsFromCollection(): Promise<SavedView[]> {
 
 	try {
 		const collection = await getViewsCollection()
-		return collection.toArray
+		const views = collection.toArray
+
+		// If collection is empty but localStorage has data, use localStorage directly
+		// This handles the race condition where TanStack DB hasn't synced yet
+		if (views.length === 0) {
+			const localStorageViews = loadViewsFromLocalStorage()
+			if (localStorageViews.length > 0) {
+				return localStorageViews
+			}
+		}
+
+		return views
 	} catch (err) {
 		console.error('[SavedViews] Failed to load from TanStack DB:', err)
-		return []
+		// Fallback to direct localStorage read
+		return loadViewsFromLocalStorage()
 	}
 }
 
